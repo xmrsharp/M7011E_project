@@ -1,19 +1,16 @@
 from sim import SimGreenMeanMachine
 from db_client import PowerPlantDBClient
 import asyncio
-
+import email
+import pprint
+from io import StringIO
 
 
 API_HEADERS = ["GET","POST","PUT","DELETE"]
 
 
 #TODO add loggs.
-#TODO Cleanup incoming stream processing.
-#TODO Prep return body message to HTTP format with headers and status codes and shit.
-#TODO Check string before querying db.
-#TODO Rename this server to plants or something similar -> and have plant have a instance of simulator.
-#
-
+#TODO Make db client calls asynchronous, as they're currently blocking.
 class SimServer():
 
     def __init__(self, ip='127.0.0.1', port= '9999'):
@@ -37,32 +34,12 @@ class SimServer():
         #Bind server to local endpoint.
         print(f'binding to socket...')
         server = await asyncio.start_server(self.handle_request,self.ip,self.port)
-        print(f'creating sim object...')
-        #Only one socket in server.
-        #print(f'type of server: {type(server)}')
-        #No way around having the 'sim' being yielded too as in the end this server endpoint
-        #will remain idle at some point from incoming connections.
-        server.get_loop().create_task(self.sim_engine.run_simulator()) #append test to event loop
-        print(f'appended sim to event loop...')
+        server.get_loop().create_task(self.sim_engine.run_simulator()) 
         addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
         print(f'serving on {addrs}...')
-        #With used to close server socket before exception -> like cntrl +c
         async with server:
             await server.serve_forever()
 
-    async def query_fetch_one(self, query):
-        cursor = self.db_connection.cursor()
-        cursor.execute(query)
-        query_res = cursor.fetchone()
-        self.db_connection.commit() #commit required to get updated state from db, otherwise the cursor from connection still has an old view of the db.
-        return query_res
-    
-    async def query_fetch_all(self, query):
-        cursor = self.db_connection.cursor()
-        cursor.execute(query)
-        query_res = cursor.fetchall()
-        self.db_connection.commit()
-        return query_res
 
     async def activate_plant(self, token, node_id):
         #switch state of node_id, to be used with token
@@ -70,31 +47,69 @@ class SimServer():
         #then update state
         pass
     
-    async def verify_token(self, token, node_id):
-        #Verify that incoming token is valid to modify state of node_id.
+
+    async def sell_power(self, plant_id, amount):
+        plant_balance = self.db_client.get_plant_storage(plant_id);
+        #if plant_balance+100 < amount:
+        # self.db_client.update
+        self.db_client.update_plant_storage(plant_id, plant_balance-amount);
+        # TODO Will get fucked by all the commits that are happening, but how to update changes within the table otherwise?
+        # TODO Look at two or more sequential queries to db.
+        #TODO RETURN OK MSG.
+
+
+    
+
+
+    
+    async def handle_get_request(self):
+        pass
+    async def handle_post_request(self):
+        pass
+    async def handle_put_request(self):
+        pass
+    async def handle_delete_request(self):
+        pass
+    async def authenticate_user(self,token,plant_ids):
+        #token should be existing in db schema.
+        
+        #plant id should be the related token.
         pass
 
-    async def sell_power(self, node_id, amount):
-        #cursor = self.db_connection.cursor()
-        #cursor.execute(f'');
+    async def generate_ticket_for_user(self, auth_server_key, plant_ids):
+        #1. make sure auth_server_key is valid.
+        #2. for every plant id, insert the token for being valid to mentioned plant_id
+        #3. return token to caller (which in this case is the auth_server (the django apps))
         pass
 
-    def try_decode_msg(self, message):
-        call_type, headers = message.split('\r\n', 1)
-        print(f'call type: {call_type}\n headers: {headers}')
+
+    async def check_ticket_validities(self):
+        #To be used in event loop, on a time intervall check that tokens are valid by comparing created/valid through.
+        #maybe just delete rows, that way no need to have active alive and will store data of tokens, why even save expired tokens?
+        pass
+
+    #credit https://stackoverflow.com/questions/39090366/how-to-parse-raw-http-request-in-python-3 @Corey Goldberg
+    async def get_request_headers(self,message):
+        req_type_and_http_version, headers = message.split('\r\n', 1)
+        message = email.message_from_file(StringIO(headers))
+        headers = dict(message.items())
+        #Below used for debuging.
+        pprint.pprint(headers, width=160)
+        return (req_type_and_http_version, headers)
 
     async def handle_request(self,reader,writer):
-        data = await reader.read(100)
+        data = await reader.read(500)
         message = data.decode("utf-8")
-        self.try_decode_msg(message);
-        client_addr,_client_port = writer.get_extra_info('peername')
-        #Recheck for DELETE that all characters are covered in byte indexing.
-        API_METHOD_TYPE = message[:6]
-        if API_HEADERS[0] in API_METHOD_TYPE:
-            #GET
-            print(f'RECIEVED:{message}\nFROM:{client_addr}')
-            #wind_speed, temperature = await self.query_fetch_one("SELECT wind_speed,temperature FROM weather ORDER BY time_sampled DESC LIMIT 1");
-            #price = await self.query_fetch_one("SELECT price FROM price_history ORDER BY time_sampled DESC LIMIT 1")
+        req_type, headers = await self.get_request_headers(message)         
+        client_addr, _client_port = writer.get_extra_info('peername')
+
+        #TODO FIRST THINGS FIRST, PROCESS AUTH HEADER TO MAKE SURE USER IS VALID.
+        #await authenticate_user(#PASS AUTH HEADER HERE)
+
+
+        if API_HEADERS[0] in req_type:
+        #if API_HEADERS[0] in API_METHOD_TYPE:
+            print(f'complete message : {message}')
             #how to add { in f string to correctly add to body of json/app msg.
             wind_speed, temperature = self.db_client.get_current_weather()
             price = self.db_client.get_price()
@@ -108,17 +123,17 @@ class SimServer():
 
 
 
-        elif API_HEADERS[1] in API_METHOD_TYPE:
+        elif API_HEADERS[1] in req_type:
             #POST
             pass
-        elif API_HEADERS[2] in API_METHOD_TYPE:
+        elif API_HEADERS[2] in req_type:
             #PUT
             pass
-        elif API_HEADERS[3] in API_METHOD_TYPE:
+        elif API_HEADERS[3] in req_type:
             #DELETE
             pass
         else:
-            #Close connection as api method is not valid is not walid.
+            #Close connection as api method is not valid.
             #Also log missuse from addr.
             pass #pass for now
         with open('log.txt','a') as log_file:

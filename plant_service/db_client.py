@@ -32,7 +32,12 @@ class PowerPlantDBClient():
         pass
 
     
-
+    def get_plant_storage(self,plant_id):
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'SELECT stored_charge FROM prosumers where plant_id={plant_id}')
+        plant_stored_power = cursor.fetchone()[0]
+        self.db_connection.commit()
+        return plant_stored_power;
 
     # Returns wind speed in m/s and temperature in celcius. 
     def get_current_weather(self):
@@ -80,8 +85,14 @@ class PowerPlantDBClient():
         res = cursor.fetchone()[0]
         self.db_connection.commit()
         return res
-
-
+    
+    #Returns a list of all valid plant_ids related to token.
+    def get_plant_related_token(self,token,plant_ids):
+        cursor = self.db_connection.cursor()
+        cursor.execute()
+        res = cursor.fetchall()
+        self.db_connection.commit()
+        return res
 
     def update_plant_storage(self, plant_id, updated_plant_storage):
         cursor = self.db_connection.cursor()
@@ -102,6 +113,7 @@ class PowerPlantDBClient():
             prep_stmnt+= plant_string+str(plant_id)+' OR '
         prep_stmnt = prep_stmnt.rstrip(' OR ')
         cursor = self.db_connection.cursor()
+        print(f'the failed prep_stmnt : {prep_stmnt}')
         cursor.execute(f'UPDATE prosumers SET active=FALSE WHERE {prep_stmnt}')
         self.db_connection.commit()
 
