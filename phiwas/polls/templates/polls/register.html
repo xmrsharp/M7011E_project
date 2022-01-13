@@ -72,6 +72,22 @@
                                 <div class="form-row">
                                     <div class="col-md-6">
                                         <div class="form-group">
+                                            <label class="small mb-1"><Address></Address></label>
+                                            {{ form.address }}
+                                            {{ form.errors.password }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+
+                                        <div class="form-group">
+                                            <label class="small mb-1">Postcode</label>
+                                            {{ form.postcode }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
                                             <label class="small mb-1">Password</label>
                                             {{ form.password1 }}
                                             {{ form.errors.password }}
