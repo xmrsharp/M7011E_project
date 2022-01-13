@@ -63,6 +63,11 @@ class RegisterForm(UserCreationForm):
                              widget=forms.TextInput(attrs={'placeholder': 'Email',
                                                            'class': 'form-control',
                                                            }))
+    address = forms.CharField(max_length=100,
+                              required=True,
+                              widget=forms.TextInput(attrs={'placeholder': 'Address',
+                                                            'class': 'form-control',
+                                                            }))
     postcode = forms.CharField(max_length=5,
                                required=True,
                                widget=forms.NumberInput(attrs={'placeholder': 'Post code',
@@ -85,7 +90,7 @@ class RegisterForm(UserCreationForm):
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'username',
-                  'email', 'password1', 'password2']
+                  'email', 'postcode', 'address', 'password1', 'password2']
 
 
 class LoginForm(AuthenticationForm):
