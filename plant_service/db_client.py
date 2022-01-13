@@ -31,7 +31,20 @@ class PowerPlantDBClient():
     def check_query_injection(self,query):
         pass
 
-    
+
+    def get_plants(self, plant_ids):
+        plant_string ="plant_id="
+        prep_stmnt = ""
+        for plant_id in plant_ids:
+            prep_stmnt+= plant_string+str(plant_id)+' OR '
+        prep_stmnt = prep_stmnt.rstrip(' OR ')
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'SELECT * FROM prosumers WHERE {prep_stmnt}')
+        res = cursor.fetchall()
+        self.db_connection.commit()
+        return res
+
+
     def get_plant_storage(self,plant_id):
         cursor = self.db_connection.cursor()
         cursor.execute(f'SELECT stored_charge FROM prosumers where plant_id={plant_id}')
@@ -113,7 +126,6 @@ class PowerPlantDBClient():
             prep_stmnt+= plant_string+str(plant_id)+' OR '
         prep_stmnt = prep_stmnt.rstrip(' OR ')
         cursor = self.db_connection.cursor()
-        print(f'the failed prep_stmnt : {prep_stmnt}')
         cursor.execute(f'UPDATE prosumers SET active=FALSE WHERE {prep_stmnt}')
         self.db_connection.commit()
 

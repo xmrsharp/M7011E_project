@@ -59,8 +59,8 @@ class SimGreenMeanMachine:
     def random_blackout(self):
         active_plants = self.db_client.get_active_plants()
         for plant_id in active_plants:
-            if r.random() >.97:
-                self.db_client.shutdown_plants([plant_id])
+            if r.random() >.95:
+                self.db_client.shutdown_plants([plant_id[0]])
                 return
 
 
