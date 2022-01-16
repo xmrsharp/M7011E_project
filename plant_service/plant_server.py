@@ -42,49 +42,31 @@ class SimServer():
         async with server:
             await server.serve_forever()
 
-    
-    async def activate_plant(self, token, node_id):
-        #switch state of node_id, to be used with token
-        #first check table that token is verified.
-        #then update state
-        pass
-    
-
-    async def sell_power(self, plant_id, amount):
-        plant_balance = self.db_client.get_plant_storage(plant_id);
-        #if plant_balance+100 < amount:
-        # self.db_client.update
-        self.db_client.update_plant_storage(plant_id, plant_balance-amount);
-
-
-    
-
 
     # TODO INSERT CHECK FOR IF ENDPOINTS ARE TO LONG -> SEND BAD REQUEST ERROR.
-    async def handle_get_request(self,end_point, auth_token, query_args):
+    # TODO change name of token to ticket.
+    # Still messy but works.
+    async def handle_get_request(self,end_point, auth_token, query_args, authorized_plants):
         # USER ALREADY AUTHENTICATED HERE.
         if end_point.startswith('/api/'):
             end_point = end_point[5:]
             if end_point.startswith('weather'):
                 end_point = end_point[7:]
-                if len(end_point) > 0:
-                    #RETURN MISS INFORMATION, i.e. ok.
-                    print(f'call exception as endpoint continues with specified : {end_point}, do the same with other endpoints aswell.')
-                get_res = self.db_client.get_current_weather()
-                return (get_res, 'weather',200);
+                wind_speed,temperature = self.db_client.get_current_weather()
+                return ((wind_speed, temperature), 'weather',200);
 
             if end_point.startswith('plants'):
                 # Leaving it empty will return all plants related to token.
                 end_point = end_point[6:]
                 if 'plant_id' in query_args:
-                    requested_plants = self.db_client.get_plants(auth_token, query_args['plant_id'])
+                    requested_plants = self.db_client.get_plants(query_args['plant_id'])
                 else:
-                    requested_plants = self.db_client.get_plants(auth_token, [])
+                    requested_plants = self.db_client.get_plants(authorized_plants)
                 return (requested_plants,'plants',200)
             
-            if end_point.startswith('token'):
+            if end_point.startswith('ticket'):
                 end_point = end_point[5:]
-                expiration_date = self.db_client.get_token_expiration(auth_token)
+                expiration_date = self.db_client.get_ticket_expiration(auth_token)
                 #Double check as this will alrdy be authorized. Does not hurt to check again.
                 if expiration_date is None:
                     valid=None; status = 401;
@@ -93,24 +75,69 @@ class SimServer():
                 else:
                     valid=True; expiration_date = expiration_date.strftime("%Y-%m-%d %H:%M:%S"); status=200;
                 return ((valid,expiration_date),'token_valid',status)
-            
-            if end_point.startswith('test'):
-                get_res = self.db_client.get_plants('TESTING');
-                return (get_res,'plants',200)
-        
-        #Will need authentication for this one.
+        return (None,None, 400)  
 
-        # Check to see if the request came from inhouse (:auth header contains inhouse flag and the signed encryption key.)
-        # If true -> we want to generate a key for the user and its nodes.
-        # By doing it this way this server can reside else where (completing the michro service architecture)
-        # The query string if it was inhouse should contain the node_ids of which plants to gain access to.
-        # Prep body with the ticket and encrypt via the auth servers public key and sign.
-        # auth server will then decrypt with priv key and verify signature.
-        # Then simply encrypt with the private key and return the token.
-        # HEADER X-Authorization -> req from auth server.
 
-    async def handle_post_request(self):
-        pass
+
+    #TODO Missing endpoint location of resource in resp call.
+    async def handle_post_request(self, end_point, auth_ticket, query_args, authorized_plants, body):
+        #print(f"got a post request with: ep{end_point}, ticket: {auth_ticket}\nquery_args: {query_args}\nbody:")
+        #try:
+        #    print("used for testing, BODY")
+        #    for key_value in body.items():
+        #        print(f'{key_value}')
+        #except Exception as e:
+        #    print(f'no dict to be found')
+        if end_point.startswith('/api/'):
+            end_point = end_point[5:]
+            if end_point.startswith('action/'):
+                end_point = end_point[7:]
+                # Three cases, on, off, and sell.
+                if end_point.startswith('on'):
+                    end_point = end_point[2:]
+                    try:
+                        plant_ids = query_args['plant_id'][0] # TODO Fix response parser so arbi number of queries can be executed.
+                        self.db_client.activate_plant(plant_ids)
+                        return ((1,1,plant_ids),'plant_activate',201)
+                    except Exception as e :
+                        print(f'exception in call to ON post {e}')
+                elif end_point.startswith('off'):
+                    end_point = end_point[3:]
+                    try:
+                        plant_ids = query_args['plant_id'][0] # TODO Fix response parser so arbi number of queries can be executed.
+                        self.db_client.shutdown_plant(plant_ids)
+                        return ((1,0,plant_ids),'plant_activate',201)
+                    except Exception as e :
+                        print(f'exception in call to OFF post {e}')
+                elif end_point.startswith('sell'):
+                    end_point = end_point[4:]
+                    try:
+                        plant_id = query_args['plant_id'][0]; amount_to_sell = int(query_args['watt_h'])
+                        plant_id,_type, _prod, _cons, stored_charge, _active  = self.db_client.get_plants([plant_id])[0]
+                        if stored_charge-amount_to_sell < 0:
+                            return ((False,stored_charge, amount_to_sell),'sell_event', 403) # result, how to parse, status 
+                        # Eligable to sell
+                        new_stored_charge = stored_charge-amount_to_sell
+                        self.db_client.update_plant_storage(plant_id, new_stored_charge)
+                        return ((True, new_stored_charge, amount_to_sell),'sell_event', 201) 
+                    except (ValueError,KeyError):
+                        print("LOG : missformed query string for specified endpoint.")
+
+        if end_point.startswith('/admin/'):
+            end_point = end_point[7:]
+            if end_point.startswith('simulator/'):
+                end_point = end_point[10:]
+                # TODO Add get simulator status.
+                if end_point.startswith('on'):
+                    self.sim_engine.turn_on()
+                    print("TODO PREP RESPONSE FOR SIM ON.")
+                elif end_point.startswith('off'):
+                    self.sim_engine.turn_off()
+                    print("TODO PREP RESPONSE FOR SIM OFF")
+        return (None,None,400)
+
+
+
     async def handle_put_request(self):
         pass
     async def handle_delete_request(self):
@@ -123,13 +150,10 @@ class SimServer():
         pass
 
     # Checks if client has any valid ticket, basically if they have authenticated in the last X hours.
-    async def check_ticket_validity(self,token):
-        ticket_exp_exist = self.db_client.get_token_expiration(token)
-        if ticket_exp_exist is None:
-            return False
-        return True
+    async def check_ticket_validity(self,ticket):
+        ticket_valid, ticket_plants = self.db_client.get_ticket_validity(ticket)
+        return ticket_valid, ticket_plants
 
-    #https://stackoverflow.com/questions/54685210/calling-sync-functions-from-async-function For running sync in async function calls.
 
 
     async def parse_http_request_info(self,message):
@@ -195,10 +219,10 @@ class SimServer():
             print(f'LOG: Badly formated request')
             await self.bad_request(writer)
             return
-        
+       
 
         #Used for debuging.
-        print(f'\nInc msg:\nMsg size: {len(message)} bytes\nMethod: {req_type}\nEndpoint: {end_point}\nheaders: {headers}\nquery str: {query_args}\nbody: {body}\n')
+        print(f'\nINC MSG:\nMsg size: {len(message)} bytes\nMethod: {req_type}\nEndpoint: {end_point}\nheaders: {headers}\nquery str: {query_args}\nbody: {body}\n')
         client_addr, _client_port = writer.get_extra_info('peername')
 
         # Check authorization header is provided as all incoming requests to this service require authentication. 
@@ -207,60 +231,86 @@ class SimServer():
             await self.unauthorized_request(writer)
             return
         else:
-            # Ticket provided, now simply check if they have an open ticket that has not expired.
-            authorized_access = await self.check_ticket_validity(headers['Authorization'])
+            # Ticket provided, now simply fetch all plant ids client has access to.
+            authorized_access, access_plants_id = await self.check_ticket_validity(headers['Authorization'])
             if not authorized_access:
                 print("LOG: User is not authorized to access the resources.")
                 await self.unauthorized_request(writer)
                 return
+        
+        # Access_plants_id contains all the authorized plant ids that the ticket holder is eligable to modify.
+        # Compare access_plants_id with plant_id from query args, as any request to modify/get those plants should corelate.
+        # TODO Revamp ticket schemas, as now a ticket may hold onto different plant ids with different expiration dates.
+        # So create new table with ticket/plant id and remove plant_id from tickets.
+        # Still works but its an uggly solution.
 
-        # Incoming request is authorized. Can still be unauthorized to get some resources.
+        if 'plant_id' in query_args:
+            #First make query_args into a list if just a simple string, as otherwise '32' will match for '3','2'
+            if isinstance(query_args['plant_id'], str):
+                query_args['plant_id'] = [query_args['plant_id']]
+            trying_to_access_unauthorized_nodes = not all(plant_id in access_plants_id for plant_id in query_args['plant_id'])
+            if trying_to_access_unauthorized_nodes:
+                print("LOG: User is trying to access plants which are not related to ticket")
+                await self.unauthorized_request(writer)
+                return
+
+        # User has formated according to api documentation and is authorized to access given resources.
+                
+            
         if API_HEADERS[0] in req_type:
             # GET REQ
             #Check for X-Authorization header, as that will signify a msg from authorization service.
             if 'X-Authorization' in headers:
                 print(f'GOT A X - AUTHROZIATON HEADER, SHOULD BE SENT BY AUTH SERVER:')
             # Perform incoming request. 
-            get_server_resp, server_resp_type, status = await self.handle_get_request(end_point, headers['Authorization'],query_args);
+            get_server_resp, server_resp_type, status = await self.handle_get_request(end_point, headers['Authorization'],query_args, access_plants_id);
             # Format response of request.
             response_str = self.response_parser.parse_get_response(get_server_resp, server_resp_type, status)
-            print(f'\n\nSENDING:\n{response_str} \nTO:[{client_addr}:{_client_port}]')
+            print(f'RESPONDING:\n{response_str}\nTO:[{client_addr}:{_client_port}]')
             response_data = response_str.encode("utf-8")
             writer.write(response_data)
             await writer.drain()
         elif API_HEADERS[1] in req_type:
             # POST REQ
-            # To include modified/inserted element or not too, that is the question (in response)
-            # Only admins are allowed to create new object, or the main auth server.
-            # Users are allowed to sell storage though.
-            # And buy in the future.
-            print("\n\n <------------ GOT A POST REQUEST. TODO ------------->\n\n")
-            pass
+            post_server_resp, server_resp_type, status = await self.handle_post_request(end_point, headers['Authorization'], query_args, access_plants_id, body)
+            response_str = self.response_parser.parse_post_response(post_server_resp, server_resp_type, status)
+            print(f'RESPONDING:\n{response_str}\nTO:[{client_addr}:{_client_port}]')
+            response_data = response_str.encode("utf-8")
+            writer.write(response_data)
+            await writer.drain()
         elif API_HEADERS[2] in req_type:
             #PUT REQ
             pass
         elif API_HEADERS[3] in req_type:
             #DELETE REQ
             print("\n\n <------------ GOT A DELETE REQUEST. TODO ------------->\n\n")
+            
             pass
         else:
             #Close connection as api method is not valid is not walid.
             print("LOG: request method not supported.")
             await self.bad_request(writer)
             return
-
         writer.close()
 
 
 class PlantJsonResponseParser:
     # Keys contains a list of keys (string) , tuple_values a list of tuples which should belong to key in rising order.
     def __init__(self):
-        self.bad_request_str = f'HTTP/1.1 400 Bad Request\n\n\n'
-        self.unauthorized_request_str = f'HTTP/1.1 401 Unauthorized\n\n\n'
-        self.good_request_str = f'HTTP/1.1 200 OK'
+        self.post_ok = f'HTTP/1.1 201 Created'
+        self.post_forbidden = f'HTTP/1.1 403 Forbidden'
+        self.get_ok = f'HTTP/1.1 200 OK'
+        self.bad_request_str = f'HTTP/1.1 400 Bad Request\r\n\r\n\r\n'
+        self.unauthorized_request_str = f'HTTP/1.1 401 Unauthorized\r\n\r\n\r\n'
         self.resp_types = {'weather': ['wind_speed','temperature'], 
                           'plants':['plant_id','type_plant','production','consumption','stored','active'],
-                          'token_valid':['valid','expiration_date']}
+                          'token_valid':['valid','expiration_date'],
+                          'sell_event':['executed','new_storage_amount','tried_to_sell_amount'],
+                          'plant_activate':['executed','plant_status','plant_id']}
+    
+
+    def form_body_resp(self,status, headers, body):
+        return f'{status}\r\n{headers}\r\n\r\n{body}'
     
     # Used for queries which return a single row of data.
     def prep_body_row(self, keys, tuple_values):
@@ -268,8 +318,7 @@ class PlantJsonResponseParser:
         for index,key in enumerate(keys):
             body[key] = tuple_values[index]
         return json.dumps(body)
-
-
+    
     def prep_body_rows(self, keys, tuple_values):
         body = []
         for tup_value in tuple_values:
@@ -279,6 +328,12 @@ class PlantJsonResponseParser:
             body.append(temp_dic)
         return json.dumps(body)
     
+    
+    def set_header_length_type(self, body_length):
+        header_length = f'Content-Length: {body_length}\n'
+        header_data_type = f'Content-Type: application/json'
+        return header_length + header_data_type 
+
     def parse_unauthorized_response(self):
         return self.unauthorized_request_str
     
@@ -292,11 +347,26 @@ class PlantJsonResponseParser:
                 body = self.prep_body_rows(self.resp_types[resp_type], resp_data)
             else:
                 body = self.prep_body_row(self.resp_types[resp_type], resp_data)
-            response = f'HTTP/1.1 200 OK\nContent-Type: application/json\n\n{body}'
+            headers = self.set_header_length_type(len(body))
+            response = self.form_body_resp(self.get_ok, headers, body)#f'{self.get_ok}Content-Type: application/json\n\n{body}'
             return response
         elif status == 401:
             return self.unauthorized_request_str
         return self.bad_request_str
+    
+    def parse_post_response(self, resp_data, resp_type, status):
+        if status == 201:
+            body = self.prep_body_row(self.resp_types[resp_type], resp_data)
+            headers = self.set_header_length_type(len(body))
+            response_str = self.form_body_resp(self.post_ok, headers, body)
+            return response_str
+        elif status == 403:
+            body = self.prep_body_row(self.resp_types[resp_type], resp_data)
+            headers = self.set_header_length_type(len(body))
+            response_str = self.form_body_resp(self.post_forbidden, headers, body)
+            return response_str
+        return self.bad_request_str
+    
 
 
 if __name__ == '__main__':
