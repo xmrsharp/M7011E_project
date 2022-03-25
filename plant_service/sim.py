@@ -5,34 +5,35 @@
 import asyncio
 import random as r
 from db_client import PowerPlantDBClient
+import os
+from dotenv import load_dotenv
+
+
 #TODO FIX COMMIT AND CATCH FOR CURSOR.EXECUTES.
 #TODO Examine if opening and closing db for minor tasks are worth it (allot safer but, if vm cannot handle it switch.)
 #TODO Throw exception if credentials are not found.
 #TODO Possibly add rain metrics for weather (attribute and update function).
 #TODO get wind speeds/temperature from some api like yr or smthng.
-
+#TODO Uppdate sim to not update con
 class SimGreenMeanMachine:
     def __init__(self, wind_speed=4, temperature=20, price=100):
-        with open('DB_CREDENTIALS.txt','r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith("sim_user"):
-                    line = line.rstrip();
-                    self.db_user, _host, self.pw, _database_name = line.split(",");
-
-        self.db_client = PowerPlantDBClient(self.db_user, self.pw)
-        #self.db_connection = db.connect('localhost',self.db_user,self.pw);
+        load_dotenv()
+        self.db_user = os.getenv('SIM_ENGINE_DB_USER')
+        self.db_pw = os.getenv('SIM_ENGINE_DB_PW')
+        #self.auth_server_key = os.getenv('AUTH_SECRET_KEY')
+        self.db_client = PowerPlantDBClient(self.db_user, self.db_pw)
+        #self.db_connection = db.connect('localhost',self.db_user,self.db_pw);
         self.is_active = True;
         
     def update_power_price(self):
-        #TODO: Change to something more realistic, like number of active nodes / some shit, or read assignement as this should be described there. 
         total_stored_charge = self.db_client.get_net_storage()
         current_power_price = self.db_client.get_price()
         if total_stored_charge < 40000:
             new_power_price = current_power_price*(1.5)# inc price.
         elif total_stored_charge < 100000:
-            new_power_price = current_power_price*.80 # lower a little
+            new_power_price = current_power_price*.99 # lower a little
         else:
-            new_power_price = current_power_price*.5 # lower price allot as allot of power exists on the market.
+            new_power_price = current_power_price*.95 # lower price allot as allot of power exists on the market.
         self.db_client.update_price(new_power_price)
 
     def update_weather(self):
@@ -61,7 +62,7 @@ class SimGreenMeanMachine:
     def random_blackout(self):
         active_plants = self.db_client.get_active_plants()
         for plant_id in active_plants:
-            if r.random() >.15:
+            if r.random() >.96:
                 self.db_client.shutdown_plant([plant_id[0]])
                 return
 
