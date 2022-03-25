@@ -6,7 +6,8 @@ import pprint
 import json
 from io import StringIO
 from datetime import datetime
-
+import os
+from dotenv import load_dotenv
 API_HEADERS = ["GET","POST","PUT","DELETE"]
 
 #TODO add loggs.
@@ -16,14 +17,10 @@ class SimServer():
     def __init__(self, ip='127.0.0.1', port= '9999'):
         self.ip = ip;
         self.port = port;
-
-        # Get credentials for power_plant db.
-        with open('DB_CREDENTIALS.txt','r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith("sim_server_user"):
-                    line = line.rstrip();
-                    self.db_user, _, self.pw, _ = line.split(",")
-       
+        load_dotenv()
+        self.db_user = os.getenv('PLANT_SERVER_DB_USER')
+        self.pw = os.getenv('PLANT_SERVER_DB_PW')
+        self.auth_secret_key = os.getenv('AUTH_SECRET_KEY')
         # Establish connection to power_plant db.
         self.db_client = PowerPlantDBClient(self.db_user, self.pw)
         # Create simulator object.
@@ -45,7 +42,7 @@ class SimServer():
 
     # TODO INSERT CHECK FOR IF ENDPOINTS ARE TO LONG -> SEND BAD REQUEST ERROR.
     # TODO change name of token to ticket.
-    # Still messy but works.
+    # TODO currently key from auth service is sent under authorization header, change that.
     async def handle_get_request(self,end_point, auth_token, query_args, authorized_plants):
         # USER ALREADY AUTHENTICATED HERE.
         if end_point.startswith('/api/'):
@@ -58,7 +55,11 @@ class SimServer():
             if end_point.startswith('plants'):
                 # Leaving it empty will return all plants related to token.
                 end_point = end_point[6:]
-                if 'plant_id' in query_args:
+                print(f'{auth_token}==?{self.auth_secret_key}')
+                print(auth_token==self.auth_secret_key)
+                if auth_token == self.auth_secret_key:
+                    requested_plants = self.db_client.admin_get_plants()
+                elif 'plant_id' in query_args:
                     requested_plants = self.db_client.get_plants(query_args['plant_id'])
                 else:
                     requested_plants = self.db_client.get_plants(authorized_plants)
@@ -142,6 +143,10 @@ class SimServer():
         pass
     async def handle_delete_request(self):
         pass
+    # TODO: Get this operational -> which will cover some other points if we miss them. basically plus.
+    # Button in django apps, if logged in, then auth should be the secret key placed.
+    # Then generate some random key, and insert with the plant_ids into the db for 6 hours
+    # and then return the key to the caller -> where we show it on the browser.
 
     async def generate_ticket_for_user(self, auth_server_key, plant_ids):
         #1. make sure auth_server_key is valid.
@@ -233,7 +238,7 @@ class SimServer():
         else:
             # Ticket provided, now simply fetch all plant ids client has access to.
             authorized_access, access_plants_id = await self.check_ticket_validity(headers['Authorization'])
-            if not authorized_access:
+            if not authorized_access and headers['Authorization'] != self.auth_secret_key:
                 print("LOG: User is not authorized to access the resources.")
                 await self.unauthorized_request(writer)
                 return
