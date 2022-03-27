@@ -1,0 +1,22 @@
+{% extends "webserver/base.html" %}
+
+
+{%block title%}Ticket{%endblock title%}
+{% block content%}
+<table>
+    <tr>
+        <td>Ticket: {{ticket}}(c) </td>
+    </tr>
+    <tr>
+        <td>For plant (id): {{plant_id}}</td>
+    </tr>
+    <tr>
+	 <td>Valid for: 6 (h)</td>
+    </tr> 
+</table>
+<div>
+    <canvas id="myChart"></canvas>
+</div>
+
+{% endblock content %}
+

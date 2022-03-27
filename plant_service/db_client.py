@@ -23,27 +23,19 @@ class PowerPlantDBClient():
         pass
 
     #TODO Delete with a fresh set of eyes so i know that they are not needed.
-    #def get_plants(self, plant_ids):
-        ####### USED FOR TESTING ########
-    #    if plant_ids=="TESTING":
-    #        cursor = self.db_connection.cursor()
-    #        cursor.execute(f'SELECT * FROM prosumers;')
-    #        res = cursor.fetchall()
-    #        self.db_connection.commit()
-    #        return res
-    #    ####### USED FOR TESTING ########
-    #    #Should only be called by auth server for loading graph.
-    #    plant_string ="plant_id="
-    #    prep_stmnt = ""
-    #    for plant_id in plant_ids:
-    #        prep_stmnt+= plant_string+str(plant_id)+' OR '
-    #    prep_stmnt = prep_stmnt.rstrip(' OR ')
-    #    cursor = self.db_connection.cursor()
-    #    cursor.execute(f'SELECT * FROM prosumers WHERE {prep_stmnt}')
-    #    res = cursor.fetchall()
-    #    self.db_connection.commit()
-    #    return res
+    def engine_get_plants(self):
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'SELECT plant_id, type, current_production, current_consumption, active  FROM prosumers;')
+        res = cursor.fetchall()
+        self.db_connection.commit()
+        cursor.close()
+        return res
 
+    def upd_plant(self, plant_id, new_prod, new_cons):
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'UPDATE prosumers SET current_production={new_prod}, current_consumption={new_cons} WHERE plant_id={plant_id};')
+        self.db_connection.commit()
+        cursor.close()
 
     def get_plant_storage(self,plant_id):
         #self.open_connection();
@@ -86,6 +78,14 @@ class PowerPlantDBClient():
         cursor.close()
         return price
 
+    def get_price_history(self):
+        cursor = self.db_connection.cursor()
+        cursor.execute('SELECT * FROM price_history ORDER BY time_sampled DESC LIMIT 30;')
+        price_history = cursor.fetchall()
+        self.db_connection.commit()
+        cursor.close()
+        return price_history
+
     # Insert log of current w/h price
     def update_price(self, new_price_value):
         #self.open_connection()
@@ -120,15 +120,52 @@ class PowerPlantDBClient():
         return res
     
     #Returns a list of all valid plant_ids related to token.
+    #Currently never used??
+    #TODO Go over all occurences of this one right here.
     def get_plant_related_token(self,token,plant_ids):
         #self.open_connection()
         cursor = self.db_connection.cursor()
-        cursor.execute()
+        cursor.execute()#Why is this one empty?
         res = cursor.fetchall()
         self.db_connection.commit()
         #self.close_connection()
         cursor.close()
         return res
+
+    def delete_plant(self, plant_id):
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'DELETE FROM tickets WHERE plant_id={plant_id};')
+        cursor.execute(f'DELETE FROM prosumers WHERE plant_id={plant_id};')
+        res = cursor.fetchall()
+        self.db_connection.commit();
+        cursor.close()
+        return True
+
+    def delete_tickets(self, ticket):
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'DELETE ')
+
+    def pair_ticket_plant(self, ticket, plant_id):
+        print(f'ERROR HERE IF plant_id DOES NOT EXIST AS PROSUMER, BUT SHOULD NOT BE POSSIBLE AS AUTH SERVER SHOULD HOLD THE TRUE CONNECTION? adding ticket {ticket} to plant_id {plant_id}')
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'INSERT INTO tickets(plant_id, token) VALUES({plant_id},"{ticket}");')
+        res = cursor.fetchall()
+        self.db_connection.commit();
+        cursor.close();
+        return res
+
+    def create_plant(self, plant_type, plant_production, plant_consumption):
+        print(f'got call to insert new plant into db.{plant_type}{plant_consumption}{plant_production}')
+        cursor = self.db_connection.cursor()
+        cursor.execute(f'INSERT INTO prosumers(type, current_production, current_consumption, stored_charge, active) VALUES("{plant_type}",{plant_production},{plant_consumption},0,1);')
+        cursor.execute(f'SELECT MAX(plant_id) FROM prosumers;')
+        res = cursor.fetchone()[0]
+        self.db_connection.commit()
+        cursor.close()
+        print(f'\n\n everything went fine in db connection returning {res}! \n\n')
+        return res
+
+
 
     def update_plant_storage(self, plant_id, updated_plant_storage):
         #self.open_connection()
@@ -170,35 +207,41 @@ class PowerPlantDBClient():
 
     # OK AND USED
     def plant_or_string(self, plants):
-        #self.open_connection()
-        plant_string ="plant_id="
-        prep_stmnt = ""
-        for plant_id in plants:
-            prep_stmnt+= plant_string+str(plant_id)+' OR '
-        prep_stmnt = prep_stmnt.rstrip(' OR ')
-        #self.close_connection()
-        #cursor.close()
-        return prep_stmnt
+        #Will this shit always be a string? what have i done here...
+        print(f'RECIEVED {plants}, {type(plants)}')
+        try:
+            plant_id = int(plants)
+            prep_stmnt = f'plant_id={plant_id}'
+            print(f'returning {prep_stmnt}')
+            return prep_stmnt
+        except Exception as e:
+            print(f'LOG: Exception {e} in plant_or_string, db client...')
+            plant_string ="plant_id="
+            prep_stmnt = ""
+            for plant_id in plants:
+                prep_stmnt+= plant_string+str(plant_id)+' OR '
+            prep_stmnt = prep_stmnt.rstrip(' OR ')
+            print(f'returning {prep_stmnt}')
+            return prep_stmnt
 
     # OK AND USED
     def shutdown_plant(self, plant_ids):
-        #self.open_connection()
+        self.open_connection()
         plant_string = self.plant_or_string(plant_ids)
         cursor = self.db_connection.cursor()
         cursor.execute(f'UPDATE prosumers SET active=0 WHERE {plant_string};')
         #cursor.execute(f'UPDATE prosumers AS P INNER JOIN tickets AS T ON P.plant_id=T.plant_id SET active=0 WHERE P.plant_id={plant_id} AND T.token="{auth_ticket}" AND T.token_expires > DATE(NOW());')
         self.db_connection.commit();
-        #self.close_connection()
         cursor.close()
+
     # OK AND USED
     def activate_plant(self, plant_ids):
-        #self.open_connection()
+        self.open_connection()
         plant_string = self.plant_or_string(plant_ids)
         cursor = self.db_connection.cursor()
         cursor.execute(f'UPDATE prosumers SET active=1 WHERE {plant_string};')
         #cursor.execute(f'UPDATE prosumers AS P INNER JOIN tickets AS T ON P.plant_id=T.plant_id SET active=1 WHERE P.plant_id={plant_id} AND T.token="{auth_ticket}" AND T.token_expires > DATE(NOW());')
         self.db_connection.commit();
-        #self.close_connection()
         cursor.close()
 
     # Used for authenticating incoming request. 
@@ -211,7 +254,6 @@ class PowerPlantDBClient():
         access_nodes = []
         for plant in ticket_plants:
             access_nodes.append(str(plant[0]))
-        #self.close_connection()
         cursor.close()
         return (len(access_nodes)>0), access_nodes
 
@@ -242,7 +284,7 @@ class PowerPlantDBClient():
         return expiration_time
 
     # To be used by plant engine, cleanup old tokens.
-    def remove_token_expire(self):
+    def remove_expired_tickets(self):
         #self.open_connection()
         cursor = self.db_connection.cursor()
         #Insert token for admin if we want admins to be superuser, else just set the admin token to never expire.

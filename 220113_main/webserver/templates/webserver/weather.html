@@ -1,0 +1,18 @@
+{% extends "webserver/base.html" %}
+
+
+{%block title%}Weather stuff {%endblock title%}
+{% block content%}
+<table>
+    <tr>
+        <td>Wind speed: {{data.wind_speed}}(m/s) </td>
+    </tr>
+    <tr>
+        <td>Temp: {{data.temperature}}(c) </td>
+    </tr>
+</table>
+<div>
+    <canvas id="myChart"></canvas>
+</div>
+
+{% endblock content %}

@@ -1,0 +1,20 @@
+{% extends "webserver/base.html" %}
+{% block title %} Price history {% endblock title%}
+{% block content %}
+	{% if price_data %}
+  	<table>
+		<th>Date (descending) </th>
+		<th>price per W/h</th>
+		{% for record in price_data %}
+		<tr>		
+			<td>{{record.time}}</td>
+    			<td>{{record.price}}</td>
+		</tr>
+		{% endfor %}
+  	</table>
+ 	{% endif %}
+ 
+ {% endblock %}
+
+
+~

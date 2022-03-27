@@ -1,0 +1,15 @@
+{% extends "webserver/base.html" %}
+{% block title %} Users list {% endblock title%}
+{% block content %}
+<h1>Registered users</h1>
+<table>
+  <th>User ID </th>
+  <th>User login status (True/False)</th>
+  {% for user in users %}
+  <tr>		
+      <td>{{user.User_ID}}</td>
+          <td>{{user.Logged_in}}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock content %}

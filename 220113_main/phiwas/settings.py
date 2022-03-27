@@ -41,15 +41,15 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
-    'polls.apps.UserConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_extensions',
     'crispy_forms',
-    'social_django',
+    'webserver.apps.UserConfig',
 ]
 
 MIDDLEWARE = [
@@ -67,7 +67,7 @@ ROOT_URLCONF = 'phiwas.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -75,8 +75,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'social_django.context_processors.backends',
-                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -138,6 +136,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/dev/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = '/home/ubuntu/M7011E_PROJ/220113_main/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/dev/ref/settings/#default-auto-field
@@ -149,19 +148,11 @@ LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = 'login'
 
 AUTHENTICATION_BACKENDS = (
-    'social_core.backends.github.GithubOAuth2',
-    'social_core.backends.google.GoogleOAuth2',
-
-    # Django default auth, takes them in order so github first
+    # Django default auth
     'django.contrib.auth.backends.ModelBackend',
 )
-# social auth for git
-SOCIAL_AUTH_GITHUB_KEY = '1e8e6433f3a018894afb'
-SOCIAL_AUTH_GITHUB_SECRET = 'c5cbb20102d611d862054d0223c611307dfe1508'
 
-# social auth configs for google
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '394569019065-jt3ql5r0l0qf7258csolpd1i8kqciun8.apps.googleusercontent.com'
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
+
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/'
+MEDIA_URL =  '/media/'

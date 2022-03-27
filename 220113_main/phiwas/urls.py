@@ -15,18 +15,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from polls.views import ResetPasswordView
+from webserver.views import ResetPasswordView
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from django.conf.urls.static import static
-from polls.views import ChangePasswordView
+from webserver.views import ChangePasswordView
 
 # ENTRY POINT FOR DJANGO, So if i go into 130.240.200.71/ the http request is sent here and forwarded
 # So this is basically the main gateway.
 urlpatterns = [
-    path('', include('polls.urls')),
-    path('testing/', include('polls.urls')), 
-    path('polls/', include('polls.urls')),
+    path('', include('webserver.urls')),
+    path('testing/', include('webserver.urls')), 
+    path('webserver/', include('webserver.urls')),
     path('admin/', admin.site.urls),
     path('password-reset/', ResetPasswordView.as_view(), name='password_reset'),
     path('password-reset-confirm/<uidb64>/<token>/',
@@ -35,7 +35,7 @@ urlpatterns = [
          name='password_reset_confirm'),
     path('password-reset-complete/',
          auth_views.PasswordResetCompleteView.as_view(
-             template_name='polls/password_reset_complete.html'),
+             template_name='webserver/password_reset_complete.html'),
          name='password_reset_complete'),
     path('password-change/', ChangePasswordView.as_view(), name='password_change'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
